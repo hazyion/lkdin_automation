@@ -1,4 +1,6 @@
 import os
+import base64
+import json
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
 import io
@@ -34,8 +36,12 @@ PRESENTATION_ID = os.getenv("PRESENTATION_ID")
 scope = ["https://spreadsheets.google.com/feeds",
          "https://www.googleapis.com/auth/drive",
          "https://www.googleapis.com/auth/presentations"]
-creds = ServiceAccountCredentials.from_json_keyfile_name(
-    G_CREDENTIAL_FILE, scope)
+# creds = ServiceAccountCredentials.from_json_keyfile_name(
+#     G_CREDENTIAL_FILE, scope)
+
+b64_creds = os.environ["SERVICE_ACCOUNT_CREDS"]
+creds_dict = json.loads(base64.b64decode(b64_creds).decode("utf-8"))
+creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
 
 auditDetails = {
     "name": "Carl Jason",
@@ -249,18 +255,22 @@ def start_process():
 
 
 def send_email(to_email, pdf_url):
-    msg = MIMEText(f"Hi {auditDetails['name']},\n\nAttached is your LinkedIn profile audit. It outlines what's working, and where a few smart tweaks can amplify how you're seen by the right audience.\n\nYou already bring the credibility - this helps make it visible.\n\nLet me know what you think. Happy to walk you through it anytime.\n\nBest,\nAmbuj\n\n{pdf_url}")
-    msg["Subject"] = "Your LinkedIn Audit is ready - actionable insights to upgrade your brand"
-    msg["From"] = EMAIL_FROM
-    msg["To"] = to_email
+    try:
+        msg = MIMEText(f"Hi {auditDetails['name']},\n\nAttached is your LinkedIn profile audit. It outlines what's working, and where a few smart tweaks can amplify how you're seen by the right audience.\n\nYou already bring the credibility - this helps make it visible.\n\nLet me know what you think. Happy to walk you through it anytime.\n\nBest,\nAmbuj\n\n{pdf_url}")
+        msg["Subject"] = "Your LinkedIn Audit is ready - actionable insights to upgrade your brand"
+        msg["From"] = EMAIL_FROM
+        msg["To"] = to_email
 
-    with smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT) as server:
-        server.login(EMAIL_FROM, EMAIL_PASSWORD)
-        server.sendmail(EMAIL_FROM, to_email, msg.as_string())
+        with smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT) as server:
+            server.login(EMAIL_FROM, EMAIL_PASSWORD)
+            server.sendmail(EMAIL_FROM, to_email, msg.as_string())
 
-    print("Email sent to", to_email)
+        print("Email sent to", to_email)
+
+    except Exception as e:
+        print(e)
 
 
 if __name__ == "__main__":
-    # start_process()
-    send_email("carljason.3012@gmail.com", "https://example.com")
+    start_process()
+    # send_email("carljason.3012@gmail.com", "https://example.com")
