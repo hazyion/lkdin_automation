@@ -63,11 +63,11 @@ def convert_and_round_down(x):
     return int(x) * 10
 
 
-def start_process():
+def start_process(sheetName = 'Template'):
     try:
         # Get data from spreadsheet
         client = gspread.authorize(creds)
-        sheet = client.open_by_key(SPREADSHEET_ID).worksheet('Template')
+        sheet = client.open_by_key(SPREADSHEET_ID).worksheet(sheetName)
 
         auditDetails["name"] = sheet.acell("A1").value
         auditDetails["followers"] = sheet.acell("C39").value
