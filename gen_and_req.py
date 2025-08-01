@@ -1,3 +1,5 @@
+import boto3
+from botocore.exceptions import ClientError
 import os
 import base64
 import json
@@ -17,20 +19,31 @@ from email.mime.text import MIMEText
 
 load_dotenv()
 
-PLACID_TOKEN = os.getenv("PLACID_TOKEN")
-PLACID_URL = os.getenv("PLACID_URL")
-TEMPLATE_UUID = os.getenv("PLACID_TEMPLATE_UUID")
+AWS_REGION = os.getenv("AWS_REGION")
+AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
+AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
 TWILIO_SID = os.getenv("TWILIO_ACCOUNT_SID")
 TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN")
 TWILIO_WHATSAPP_NUMBER = os.getenv("TWILIO_WHATSAPP_NUMBER")
-YOUR_WHATSAPP = os.getenv("YOUR_WHATSAPP")
+BUSINESS_WHATSAPP_NUMBER = os.getenv("BUSINESS_WHATSAPP_NUMBER")
+AMBUJ_WHATSAPP = os.getenv("AMBUJ_WHATSAPP")
+JASON_WHATSAPP = os.getenv("JASON_WHATSAPP")
 SPREADSHEET_ID = os.getenv("SPREADSHEET_ID")
-EMAIL_FROM = os.getenv("EMAIL_FROM")
-EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
-SMTP_SERVER = os.getenv("SMTP_SERVER", "smtp.gmail.com")
-SMTP_PORT = int(os.getenv("SMTP_PORT", 465))
+CLIENT_MESSAGE_SID = os.getenv("CLIENT_MESSAGE_SID")
+APPROVAL_MESSAGE_SID = os.getenv("APPROVAL_MESSAGE_SID")
+EMAIL_SENDER = os.getenv("EMAIL_SENDER")
 G_CREDENTIAL_FILE = os.getenv("G_CREDENTIAL_FILE")
 PRESENTATION_ID = os.getenv("PRESENTATION_ID")
+
+CHARSET = "UTF-8"
+
+# Create SES client
+aws_client = boto3.client(
+    'ses',
+    region_name=AWS_REGION,
+    aws_access_key_id=AWS_ACCESS_KEY_ID,
+    aws_secret_access_key=AWS_SECRET_ACCESS_KEY
+)
 
 # Set up Google Sheets
 scope = ["https://spreadsheets.google.com/feeds",
@@ -44,15 +57,16 @@ creds_dict = json.loads(base64.b64decode(b64_creds).decode("utf-8"))
 creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
 
 auditDetails = {
-    "name": "Carl Jason",
-    "title": "Software Developer",
-    "followers": 801,
-    "pb_s": 4.3,
-    "cs_s": 8.1,
-    "es_s": 8.5,
-    "po_s": 2.5,
-    "ape_s": 8.2,
+    "name": "",
+    "title": "",
+    "followers": 0,
+    "pb_s": 0,
+    "cs_s": 0,
+    "es_s": 0,
+    "po_s": 0,
+    "ape_s": 0,
     "recommendations": "",
+    "os_s": 0,
     "ovr": ""
 }
 
@@ -110,6 +124,7 @@ def scale_and_round(score):
 def start_process(sheetName='29 Ambuj S'):
     try:
         # Get data from spreadsheet
+        print('Process started')
         client = gspread.authorize(creds)
         sheet = client.open_by_key(SPREADSHEET_ID).worksheet(sheetName)
 
@@ -139,7 +154,8 @@ def start_process(sheetName='29 Ambuj S'):
         auditDetails["ovr"] = get_score_description(auditDetails["os_s"])
 
         recipient_email = sheet.acell("C43").value
-        phone_number = sheet.acell("C42").value
+        phone_number = sheet.acell("C44").value
+        print('Extracted data from google sheet')
 
         slides_service = build('slides', 'v1', credentials=creds)
         drive_service = build('drive', 'v3', credentials=creds)
@@ -236,9 +252,12 @@ def start_process(sheetName='29 Ambuj S'):
             body=fileUpdates
         ).execute()
 
+        # PDF link
         editor_link = f"https://docs.google.com/presentation/d/{copy_presentation_id}/edit"
-        # sheet.update_acell("C49", editor_link)
-        return
+        sheet.update_acell("C46", editor_link)
+        pdf_link = f"https://docs.google.com/presentation/d/{copy_presentation_id}/export/pdf"
+        sheet.update_acell("C45", pdf_link)
+        print('Created new report in google slides')
 
         # # Show all elements in slide
         # presentation = slides_service.presentations().get(
@@ -260,38 +279,37 @@ def start_process(sheetName='29 Ambuj S'):
         #         print(
         #             f"- ID: {obj_id} | Type: {shape_type} | Text: '{text.strip()}'")
 
-        # Download PDF
-
-        request = drive_service.files().export_media(
-            fileId=copy_presentation_id, mimeType='application/pdf')
-        pdf_file = request.execute()
-
-        name = auditDetails["name"].replace(" ", "_")
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"{name}_{timestamp}.pdf"
-
-        with open(f"pdfs/{filename}", 'wb') as f:
-            f.write(pdf_file)
-
-        print(f"PDF downloaded as {filename}")
-
-        # # PDF link
-        # pdf_link = f"https://docs.google.com/presentation/d/{
-        #     copy_presentation_id}/export/pdf"
+        # # Download PDF
         #
-        # sheet.update_acell("C45", pdf_link)
-        return
+        # request = drive_service.files().export_media(
+        #     fileId=copy_presentation_id, mimeType='application/pdf')
+        # pdf_file = request.execute()
+        #
+        # name = auditDetails["name"].replace(" ", "_")
+        # timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        # filename = f"{name}_{timestamp}.pdf"
+        #
+        # with open(f"pdfs/{filename}", 'wb') as f:
+        #     f.write(pdf_file)
+        #
+        # print(f"PDF downloaded as {filename}")
 
         # Send WhatsApp message via Twilio for approval
         twilio_client = Client(TWILIO_SID, TWILIO_AUTH_TOKEN)
         message = twilio_client.messages.create(
-            from_=f"{TWILIO_WHATSAPP_NUMBER}",
-            to=f"{YOUR_WHATSAPP}",
-            body=f"{auditDetails["name"]}'s report is ready: {
-                pdf_link}\nIf you wish to make changes to the document, click this link to edit and save the document: {editor_link}\nReply 'yes' to approve and send to {recipient_email}",
-            media_url=[pdf_link]
+            from_=f"{BUSINESS_WHATSAPP_NUMBER}",
+            to=f"whatsapp:+91{phone_number}",
+            content_variables = json.dumps({
+                "1": auditDetails["name"],
+                "2": pdf_link,
+                "3": editor_link,
+                "4": recipient_email
+                }),
+            content_sid = APPROVAL_MESSAGE_SID
+            # body=f"{auditDetails["name"]}'s report is ready: {
+            #     pdf_link}\nIf you wish to make changes to the document, click this link to edit and save the document: {editor_link}\nReply 'yes' to approve and send to {recipient_email}",
         )
-        print("Approval message sent. SID:", message)
+        print("Approval message sent.")
 
         start_time = time.time()
         approved = False
@@ -302,9 +320,9 @@ def start_process(sheetName='29 Ambuj S'):
         # Poll Twilio for replies
         while time.time() - start_time < 300:  # 5 minutes timeout
             messages = twilio_client.messages.list(
-                to=f"{TWILIO_WHATSAPP_NUMBER}", limit=5)
+                to=f"{BUSINESS_WHATSAPP_NUMBER}", limit=5)
             for msg in messages:
-                if msg.direction == "inbound" and msg.date_sent > curDatetime and msg.from_ == f"{YOUR_WHATSAPP}":
+                if msg.direction == "inbound" and msg.date_sent > curDatetime and msg.from_ == f"whatsapp:+91{phone_number}":
                     if msg.body.strip().lower() in ["yes", "approve"]:
                         approved = True
                         print("Approval received.")
@@ -327,31 +345,57 @@ def start_process(sheetName='29 Ambuj S'):
 
 # Send email to client
 def send_email(to_email, pdf_url):
+    BODY_HTML = f"""
+    <html>
+    <head><head>
+    <body>
+        <h4>Hi {auditDetails['name']},</h4>
+        <p>Attached is your LinkedIn profile audit. It outlines what's working, and where a few smart tweaks can amplify how you're seen by the right audience.</p>
+        <p>You already bring the credibility - this helps make it visible.</p>
+        <p>Let me know what you think. Happy to walk you through it anytime.</p>
+        <br/>
+        <h4>Best,</h4>
+        <h4>Ambuj</h4>
+        <br/>
+        <a target="_blank" href="{pdf_url}">LinkedIn profile audit report</a>
+    </body>
+    </html>
+    """
+    BODY_TEXT = f"""
+    Hi {auditDetails['name']},\n\nAttached is your LinkedIn profile audit. It outlines what's working, and where a few smart tweaks can amplify how you're seen by the right audience.\n\nYou already bring the credibility - this helps make it visible.\n\nLet me know what you think. Happy to walk you through it anytime.\n\nBest,\nAmbuj\n\n{pdf_url}
+    """
+    SUBJECT = "Your LinkedIn Audit is ready - actionable insights to upgrade your brand"
     try:
-        msg = MIMEText(f"Hi {auditDetails['name']},\n\nAttached is your LinkedIn profile audit. It outlines what's working, and where a few smart tweaks can amplify how you're seen by the right audience.\n\nYou already bring the credibility - this helps make it visible.\n\nLet me know what you think. Happy to walk you through it anytime.\n\nBest,\nAmbuj\n\n{pdf_url}")
-        msg["Subject"] = "Your LinkedIn Audit is ready - actionable insights to upgrade your brand"
-        msg["From"] = EMAIL_FROM
-        msg["To"] = to_email
-
-        with smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT) as server:
-            server.login(EMAIL_FROM, EMAIL_PASSWORD)
-            server.sendmail(EMAIL_FROM, to_email, msg.as_string())
-
-        print(f"Email sent to client's address at {mask_email(to_email)}")
-
-    except Exception as e:
-        print(e)
+        response = aws_client.send_email(
+            Destination={'ToAddresses': [to_email]},
+            Message={
+                'Body': {
+                    'Html': {'Charset': CHARSET, 'Data': BODY_HTML},
+                    'Text': {'Charset': CHARSET, 'Data': BODY_TEXT},
+                },
+                'Subject': {'Charset': CHARSET, 'Data': SUBJECT},
+            },
+            Source=EMAIL_SENDER
+        )
+    except ClientError as e:
+        print(e.response['Error']['Message'])
+    else:
+        print(f"Email sent! Message ID: {response['MessageId']}")
 
 
 # Send whatsapp message to client
-def send_w_message(phone_num, pdf_url):
+def send_w_message(phone_num, pdf_link):
     try:
+        client = Client(TWILIO_SID, TWILIO_AUTH_TOKEN)
         message = client.messages.create(
             from_='whatsapp:+15557957011',
-            to=f'whatsapp:+91${phone_num}',
-            body='Template message'
+            to=f'whatsapp:+91{phone_num}',
+            content_variables = json.dumps({
+                "1": auditDetails["name"],
+                "2": pdf_link
+                }),
+            content_sid = CLIENT_MESSAGE_SID
         )
-
         print(f"Message sent to client's whatsapp at {mask_phone(phone_num)}.")
 
     except Exception as e:
@@ -360,5 +404,6 @@ def send_w_message(phone_num, pdf_url):
 
 if __name__ == "__main__":
     # start_process()
-    send_email("carljason.3012@gmail.com", "https://docs.google.com/presentation/d/1HEpifNk3pTArN2qERbBX75dhOCbgSWLMIjkmGXrHxxU/export/pdf")
-    # send_w_message("9942727949", "https://example.com");
+    # send_email("carljason.3012@gmail.com", "https://docs.google.com/presentation/d/1HEpifNk3pTArN2qERbBX75dhOCbgSWLMIjkmGXrHxxU/export/pdf")
+    # send_w_message("9942727949", "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf");
+    pass
