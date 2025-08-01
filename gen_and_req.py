@@ -298,7 +298,7 @@ def start_process(sheetName='29 Ambuj S'):
         twilio_client = Client(TWILIO_SID, TWILIO_AUTH_TOKEN)
         message = twilio_client.messages.create(
             from_=f"{BUSINESS_WHATSAPP_NUMBER}",
-            to=f"{JASON_WHATSAPP}",
+            to=f"{AMBUJ_WHATSAPP}",
             content_variables = json.dumps({
                 "1": auditDetails["name"],
                 "2": pdf_link,
@@ -320,7 +320,7 @@ def start_process(sheetName='29 Ambuj S'):
             messages = twilio_client.messages.list(
                 to=f"{BUSINESS_WHATSAPP_NUMBER}", limit=5)
             for msg in messages:
-                if msg.direction == "inbound" and msg.date_sent > curDatetime and msg.from_ == f"{JASON_WHATSAPP}":
+                if msg.direction == "inbound" and msg.date_sent > curDatetime and msg.from_ == f"{AMBUJ_WHATSAPP}":
                     if msg.body.strip().lower() in ["yes", "approve"]:
                         approved = True
                         print("Approval received.")
