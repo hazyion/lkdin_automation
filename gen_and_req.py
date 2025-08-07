@@ -163,7 +163,7 @@ def start_process(sheetName='29 Ambuj S'):
         # Create new report
         copy_response = drive_service.files().copy(
             fileId=PRESENTATION_ID,
-            body={"name": f"Temp Copy for {auditDetails['name']}"}
+            body={"name": f"Linkedin profile audit report - {auditDetails['name']}"}
         ).execute()
         copy_presentation_id = copy_response["id"]
 
@@ -316,7 +316,7 @@ def start_process(sheetName='29 Ambuj S'):
         curDatetime = datetime.now(timezone.utc)
 
         # Poll Twilio for replies
-        while time.time() - start_time < 300:  # 5 minutes timeout
+        while time.time() - start_time < 48 * 60 * 60:  # 48 hours timeout
             messages = twilio_client.messages.list(
                 to=f"{BUSINESS_WHATSAPP_NUMBER}", limit=5)
             for msg in messages:
@@ -351,21 +351,26 @@ def send_email(to_email, pdf_url):
         <p>Attached is your LinkedIn profile audit. It outlines what's working, and where a few smart tweaks can amplify how you're seen by the right audience.</p>
         <p>You already bring the credibility - this helps make it visible.</p>
         <p>Let me know what you think. Happy to walk you through it anytime.</p>
+        <a target="_blank" href="{pdf_url}">LinkedIn profile audit report</a>
         <br/>
         <h4>Best,</h4>
         <h4>Ambuj</h4>
-        <br/>
-        <a target="_blank" href="{pdf_url}">LinkedIn profile audit report</a>
     </body>
     </html>
     """
     BODY_TEXT = f"""
-    Hi {auditDetails['name']},\n\nAttached is your LinkedIn profile audit. It outlines what's working, and where a few smart tweaks can amplify how you're seen by the right audience.\n\nYou already bring the credibility - this helps make it visible.\n\nLet me know what you think. Happy to walk you through it anytime.\n\nBest,\nAmbuj\n\n{pdf_url}
+    Hi {auditDetails['name']},\n\nAttached is your LinkedIn profile audit. It outlines what's working, and where a few smart tweaks can amplify how you're seen by the right audience.\n\nYou already bring the credibility - this helps make it visible.\n\nLet me know what you think. Happy to walk you through it anytime.\n\n{pdf_url}\n\nBest,\nAmbuj
     """
     SUBJECT = "Your LinkedIn Audit is ready - actionable insights to upgrade your brand"
     try:
         response = aws_client.send_email(
-            Destination={'ToAddresses': [to_email]},
+            Destination={
+                'ToAddresses': [to_email],
+                'CcAddresses': [
+                    "ambuj@bnbnation.com",
+                    "nidhirani.mh.nr@gmail.com"
+                ]
+            },
             Message={
                 'Body': {
                     'Html': {'Charset': CHARSET, 'Data': BODY_HTML},
